@@ -5,11 +5,24 @@ import io
 import os
 from typing import Optional
 
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
+from src.classification import (
+    ClassificationResult,
+    compare_classification_models,
+    create_classifier_pipeline,
+    evaluate_classifier_model,
+)
 from src.data_loader import analyze_dataset, get_data_summary_table, load_dataset
-from src.validation import validate_dataframe
+from src.plots import plot_confusion_matrix
+from src.preprocessing import build_preprocessor, split_data
+from src.validation import (
+    validate_classification_target,
+    validate_dataframe,
+    validate_features_and_target,
+)
 
 st.set_page_config(
     page_title="ML-лабораторія для відкритих даних",
@@ -27,6 +40,8 @@ def init_session_state() -> None:
         st.session_state.dataset_info = None
     if "dataset_name" not in st.session_state:
         st.session_state.dataset_name = None
+    if "classification_results" not in st.session_state:
+        st.session_state.classification_results = None
 
 
 def render_sidebar():
@@ -123,7 +138,6 @@ def render_data_page():
 
     if df is None or info is None:
         st.info("👈 Завантажте файл (CSV/XLSX) через бічну панель або натисніть «Завантажити демо-дані».")
-
         st.markdown(
             """
             ### 📌 Вимоги до даних
@@ -164,7 +178,7 @@ def render_data_page():
         st.warning(
             f"⚠️ Виявлено високо-кардинальні категоріальні стовпці (>50 унікальних значень): "
             f"**{', '.join(info.high_cardinality_columns)}**. "
-            "При навчанні моделей такі ознаки можуть суттєво роздути простір ознак (OneHot) або вимагатимуть виключення."
+            "При OneHot-кодуванні такі ознаки можуть суттєво роздути розмірність."
         )
 
     # Вкладки детального перегляду
@@ -207,6 +221,228 @@ def render_data_page():
             st.dataframe(df.describe(include="all"), use_container_width=True)
 
 
+def render_classification_page():
+    """Відображає сторінку навчання та оцінювання класифікації."""
+    st.header("🎯 Класифікація відкритих даних")
+
+    df = st.session_state.df
+    info = st.session_state.dataset_info
+
+    if df is None or info is None:
+        st.warning("⚠️ Спочатку завантажте дані у вкладці «Дані та огляд» або оберіть демо-набір у бічному меню.")
+        return
+
+    st.markdown(
+        "Налаштуйте вибір ознак, цільової змінної та параметрів моделювання. "
+        "Усі перетворення виконуються всередині `sklearn.pipeline.Pipeline` без витоку даних."
+    )
+
+    # 1. Вибір цільової змінної
+    candidate_targets = [
+        c for c in info.columns
+        if (c in info.categorical_columns) or (c in info.numeric_columns and info.unique_counts.get(c, 0) <= 20)
+    ]
+    if not candidate_targets:
+        candidate_targets = info.columns
+
+    col_t1, col_t2 = st.columns([2, 1])
+    with col_t1:
+        target_col = st.selectbox(
+            "Оберіть цільову змінну (класи, які потрібно передбачити):",
+            candidate_targets,
+            index=0 if candidate_targets else None,
+            help="Рекомендовано обирати стовпці з дискретними класами або категоріями.",
+        )
+    with col_t2:
+        if target_col:
+            st.caption(f"Унікальних класів у цілі: **{df[target_col].nunique(dropna=True)}**")
+
+    # Валідація обраної цілі
+    if target_col:
+        is_target_valid, target_msgs, meta = validate_classification_target(df[target_col])
+        for msg in target_msgs:
+            if not is_target_valid:
+                st.error(f"❌ {msg}")
+            elif "Попередження" in msg:
+                st.warning(f"⚠️ {msg}")
+        if not is_target_valid:
+            return
+
+    # 2. Вибір ознак (X)
+    available_features = [c for c in info.columns if c != target_col]
+    default_features = [
+        c for c in available_features
+        if c not in info.datetime_columns and c not in info.high_cardinality_columns
+    ]
+
+    selected_features = st.multiselect(
+        "Оберіть ознаки (X) для навчання моделі:",
+        available_features,
+        default=default_features if default_features else available_features[:5],
+        help="Ви можете комбінувати числові та категоріальні ознаки.",
+    )
+
+    # Валідація вибору ознак
+    is_feat_valid, feat_errors = validate_features_and_target(selected_features, target_col, require_target=True)
+    if not is_feat_valid:
+        for err in feat_errors:
+            st.error(f"❌ {err}")
+        return
+
+    # Попередження про високу кардинальність обраних ознак
+    selected_high_cards = [c for c in selected_features if c in info.high_cardinality_columns]
+    if selected_high_cards:
+        st.warning(
+            f"⚠️ Обрано високо-кардинальні ознаки: **{', '.join(selected_high_cards)}**. "
+            "Це може створити велику кількість стовпців після OneHotEncoder."
+        )
+
+    # 3. Налаштування поділу вибірки
+    st.subheader("⚙️ Параметри поділу вибірки та моделювання")
+    col_p1, col_p2, col_p3 = st.columns(3)
+
+    with col_p1:
+        test_size = st.slider(
+            "Частка тестової вибірки (Test Size):",
+            min_value=0.1,
+            max_value=0.4,
+            value=0.2,
+            step=0.05,
+            help="Зазвичай 20-30% даних залишають для фінальної перевірки.",
+        )
+
+    with col_p2:
+        date_options = ["Не використовувати (стратифікований поділ)"] + info.datetime_columns
+        chosen_date_option = st.selectbox(
+            "Хронологічний поділ за датою:",
+            date_options,
+            help="Поділ «минуле -> майбутнє» без shuffle для часових рядів/реєстрів.",
+        )
+        date_col = None if chosen_date_option.startswith("Не використовувати") else chosen_date_option
+
+    with col_p3:
+        model_choice = st.selectbox(
+            "Модель класифікації:",
+            [
+                "Порівняти обидві (Logistic Regression vs Random Forest)",
+                "Логістична регресія (Logistic Regression)",
+                "Випадковий ліс (Random Forest Classifier)",
+            ],
+        )
+
+    use_balanced = st.checkbox(
+        "Враховувати дисбаланс класів (class_weight='balanced')",
+        value=True,
+        help="Призначає більшу вагу міноритарним (рідкісним) класам.",
+    )
+
+    # 4. Запуск навчання
+    if st.button("🚀 Навчити модель(і)", type="primary", use_container_width=True):
+        with st.spinner("Триває підготовка конвеєра та навчання..."):
+            # Визначаємо типи серед обраних ознак
+            num_feats = [c for c in selected_features if c in info.numeric_columns]
+            cat_feats = [c for c in selected_features if c in info.categorical_columns]
+
+            try:
+                # Поділ даних
+                X_train, X_test, y_train, y_test, split_desc = split_data(
+                    df=df,
+                    feature_cols=selected_features,
+                    target_col=target_col,
+                    test_size=test_size,
+                    date_col=date_col,
+                    task_type="classification",
+                    random_state=42,
+                )
+
+                st.success(f"✅ {split_desc}")
+
+                # Створюємо моделі для навчання
+                models_to_run = []
+                if "Логістична регресія" in model_choice:
+                    models_to_run.append(("logistic_regression", "Логістична регресія"))
+                elif "Випадковий ліс" in model_choice:
+                    models_to_run.append(("random_forest", "Випадковий ліс (Random Forest)"))
+                else:
+                    models_to_run.append(("logistic_regression", "Логістична регресія"))
+                    models_to_run.append(("random_forest", "Випадковий ліс (Random Forest)"))
+
+                results: dict[str, ClassificationResult] = {}
+
+                for m_type, m_name in models_to_run:
+                    preprocessor = build_preprocessor(
+                        numeric_features=num_feats,
+                        categorical_features=cat_feats,
+                        scale_numeric=True,
+                        numeric_scaler="standard",
+                        numeric_imputer="median",
+                    )
+                    pipeline = create_classifier_pipeline(
+                        preprocessor=preprocessor,
+                        model_type=m_type,
+                        use_balanced_weights=use_balanced,
+                        random_state=42,
+                    )
+                    res = evaluate_classifier_model(
+                        pipeline=pipeline,
+                        X_train=X_train,
+                        y_train=y_train,
+                        X_test=X_test,
+                        y_test=y_test,
+                        model_type=m_type,
+                        model_name=m_name,
+                    )
+                    results[m_name] = res
+
+                st.session_state.classification_results = results
+
+            except Exception as e:
+                st.error(f"❌ Виникла помилка під час навчання моделі: {e}")
+                return
+
+    # 5. Відображення результатів
+    if st.session_state.classification_results is not None:
+        results = st.session_state.classification_results
+        st.markdown("---")
+        st.subheader("📊 Результати оцінювання на тестовій вибірці")
+
+        # Якщо декілька моделей — виводимо порівняльну таблицю
+        if len(results) > 1:
+            st.markdown("##### 🏆 Порівняння моделей")
+            comp_df = compare_classification_models(results)
+            st.dataframe(comp_df, use_container_width=True)
+
+        # Детальні результати для кожної моделі
+        for name, res in results.items():
+            with st.expander(f"Детальні результати: {name}", expanded=True):
+                m = res.metrics
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Accuracy (Загальна точність)", f"{m.accuracy:.1%}")
+                c2.metric("Precision (Macro)", f"{m.precision_macro:.3f}")
+                c3.metric("Recall (Macro)", f"{m.recall_macro:.3f}")
+                c4.metric("F1-Score (Macro)", f"{m.f1_macro:.3f}")
+
+                g_col1, g_col2 = st.columns([1, 1])
+
+                with g_col1:
+                    st.markdown("##### Матриця невідповідностей (Confusion Matrix)")
+                    fig_cm = plot_confusion_matrix(m.confusion_matrix, res.classes, title=f"Confusion Matrix: {name}")
+                    st.pyplot(fig_cm)
+                    plt.close(fig_cm)
+
+                with g_col2:
+                    st.markdown("##### Звіт класифікації (Classification Report)")
+                    st.dataframe(m.report_df, use_container_width=True)
+
+                # Блок інтерпретації та обмежень
+                st.markdown("---")
+                int_col, lim_col = st.columns(2)
+                with int_col:
+                    st.info(f"💡 **Як інтерпретувати результати:**\n\n{res.interpretation}")
+                with lim_col:
+                    st.warning(f"⚠️ **Обмеження методу:**\n\n{res.limitations}")
+
+
 def main():
     """Головна функція запуску застосунку."""
     init_session_state()
@@ -215,8 +451,7 @@ def main():
     if mode == "📊 Дані та огляд":
         render_data_page()
     elif mode == "🎯 Класифікація":
-        st.header("🎯 Класифікація")
-        st.info("Модуль класифікації буде реалізовано на Етапі 3.")
+        render_classification_page()
     elif mode == "📈 Регресія":
         st.header("📈 Регресія")
         st.info("Модуль регресії буде реалізовано на Етапі 4.")
