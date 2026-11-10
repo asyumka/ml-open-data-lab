@@ -6,6 +6,7 @@ import os
 from typing import Optional
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -17,6 +18,12 @@ from src.classification import (
     evaluate_classifier_model,
 )
 from src.data_loader import analyze_dataset, get_data_summary_table, load_dataset
+from src.export import (
+    export_dataframe_to_csv,
+    export_metrics_summary_to_csv,
+    export_model_to_joblib,
+    export_test_predictions_to_csv,
+)
 from src.plots import (
     plot_confusion_matrix,
     plot_pca_anomalies,
@@ -59,6 +66,10 @@ def init_session_state() -> None:
         st.session_state.regression_results = None
     if "anomaly_results" not in st.session_state:
         st.session_state.anomaly_results = None
+    if "cls_test_data" not in st.session_state:
+        st.session_state.cls_test_data = None
+    if "reg_test_data" not in st.session_state:
+        st.session_state.reg_test_data = None
 
 
 def render_sidebar():
@@ -359,6 +370,7 @@ def render_classification_page():
                     random_state=42,
                 )
 
+                st.session_state.cls_test_data = (X_test, y_test, target_col)
                 st.success(f"✅ {split_desc}")
 
                 models_to_run = []
@@ -440,6 +452,49 @@ def render_classification_page():
                     st.info(f"💡 **Як інтерпретувати результати:**\n\n{res.interpretation}")
                 with lim_col:
                     st.warning(f"⚠️ **Обмеження методу:**\n\n{res.limitations}")
+
+                # Збереження та експорт
+                st.markdown("---")
+                st.markdown("##### 💾 Експорт результатів моделювання")
+                d_col1, d_col2, d_col3 = st.columns(3)
+
+                with d_col1:
+                    X_test_df = None
+                    if st.session_state.cls_test_data is not None:
+                        X_test_df = st.session_state.cls_test_data[0]
+                    csv_pred = export_test_predictions_to_csv(
+                        y_test=res.y_test,
+                        y_pred=res.y_pred,
+                        target_name=target_col,
+                        X_test=X_test_df,
+                    )
+                    st.download_button(
+                        label=f"📥 Завантажити CSV з прогнозами ({name})",
+                        data=csv_pred,
+                        file_name=f"predictions_{res.model_type}.csv",
+                        mime="text/csv",
+                        key=f"dl_cls_pred_{res.model_type}",
+                    )
+
+                with d_col2:
+                    csv_metrics = export_metrics_summary_to_csv(m.report_df)
+                    st.download_button(
+                        label="📥 Завантажити звіт метрик (CSV)",
+                        data=csv_metrics,
+                        file_name=f"metrics_{res.model_type}.csv",
+                        mime="text/csv",
+                        key=f"dl_cls_metrics_{res.model_type}",
+                    )
+
+                with d_col3:
+                    joblib_bytes = export_model_to_joblib(res.pipeline)
+                    st.download_button(
+                        label="📦 Зберегти навчену модель (.joblib)",
+                        data=joblib_bytes,
+                        file_name=f"model_{res.model_type}.joblib",
+                        mime="application/octet-stream",
+                        key=f"dl_cls_joblib_{res.model_type}",
+                    )
 
 
 def render_regression_page():
@@ -574,6 +629,7 @@ def render_regression_page():
                     random_state=42,
                 )
 
+                st.session_state.reg_test_data = (X_test, y_test, target_col)
                 st.success(f"✅ {split_desc}")
 
                 models_to_run = []
@@ -667,6 +723,59 @@ def render_regression_page():
                 with lim_col:
                     st.warning(f"⚠️ **Обмеження методу:**\n\n{res.limitations}")
 
+                # Збереження та експорт
+                st.markdown("---")
+                st.markdown("##### 💾 Експорт результатів регресії")
+                d_col1, d_col2, d_col3 = st.columns(3)
+
+                with d_col1:
+                    X_test_df = None
+                    if st.session_state.reg_test_data is not None:
+                        X_test_df = st.session_state.reg_test_data[0]
+                    csv_pred = export_test_predictions_to_csv(
+                        y_test=res.y_test,
+                        y_pred=res.y_pred,
+                        target_name=res.target_name,
+                        X_test=X_test_df,
+                    )
+                    st.download_button(
+                        label=f"📥 Завантажити CSV з прогнозами ({name})",
+                        data=csv_pred,
+                        file_name=f"regression_predictions_{res.model_type}.csv",
+                        mime="text/csv",
+                        key=f"dl_reg_pred_{res.model_type}",
+                    )
+
+                with d_col2:
+                    metrics_export_df = pd.DataFrame(
+                        [
+                            {
+                                "Модель": res.model_name,
+                                "MAE": res.metrics.mae,
+                                "RMSE": res.metrics.rmse,
+                                "R2": res.metrics.r2,
+                            }
+                        ]
+                    )
+                    csv_metrics = export_dataframe_to_csv(metrics_export_df)
+                    st.download_button(
+                        label="📥 Завантажити метрики (CSV)",
+                        data=csv_metrics,
+                        file_name=f"regression_metrics_{res.model_type}.csv",
+                        mime="text/csv",
+                        key=f"dl_reg_metrics_{res.model_type}",
+                    )
+
+                with d_col3:
+                    joblib_bytes = export_model_to_joblib(res.pipeline)
+                    st.download_button(
+                        label="📦 Зберегти навчену модель (.joblib)",
+                        data=joblib_bytes,
+                        file_name=f"regression_model_{res.model_type}.joblib",
+                        mime="application/octet-stream",
+                        key=f"dl_reg_joblib_{res.model_type}",
+                    )
+
 
 def render_anomaly_page():
     """Відображає сторінку виявлення аномалій (Isolation Forest / LOF)."""
@@ -684,7 +793,6 @@ def render_anomaly_page():
         "Включає розрахунок балу аномальності, проекцію в 2D PCA простір та z-score аналіз відхилень."
     )
 
-    # 1. Вибір ознак
     available_features = [
         c for c in info.columns
         if c not in info.datetime_columns and c not in info.high_cardinality_columns
@@ -701,7 +809,6 @@ def render_anomaly_page():
         st.error("❌ Оберіть хоча б одну ознаку для виявлення аномалій.")
         return
 
-    # 2. Налаштування параметрів
     st.subheader("⚙️ Параметри методів виявлення аномалій")
     col_a1, col_a2, col_a3 = st.columns(3)
 
@@ -745,7 +852,6 @@ def render_anomaly_page():
             help="Розмір локального околу для розрахунку щільності.",
         )
 
-    # 3. Запуск аналізу
     if st.button("🚀 Виявити аномалії", type="primary", use_container_width=True):
         with st.spinner("Триває розрахунок аномалій, PCA проекції та z-score відхилень..."):
             m_type = "isolation_forest" if "Isolation Forest" in model_choice else "local_outlier_factor"
@@ -756,7 +862,7 @@ def render_anomaly_page():
                 numeric_features=num_feats,
                 categorical_features=cat_feats,
                 scale_numeric=True,
-                numeric_scaler="robust",  # RobustScaler стійкіший до викидів при пошуку аномалій
+                numeric_scaler="robust",
                 numeric_imputer="median",
             )
 
@@ -776,13 +882,11 @@ def render_anomaly_page():
                 st.error(f"❌ Помилка під час пошуку аномалій: {e}")
                 return
 
-    # 4. Відображення результатів
     if st.session_state.anomaly_results is not None:
         res: AnomalyDetectionResult = st.session_state.anomaly_results
         st.markdown("---")
         st.subheader(f"📊 Результати виявлення аномалій: {res.model_name}")
 
-        # ЖОРСТКА ВИМОГА: НЕ показувати accuracy!
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Всього записів у датасеті", f"{res.n_samples:,}")
         c2.metric("Виявлено аномалій (шт)", f"{res.n_anomalies:,}")
@@ -790,7 +894,6 @@ def render_anomaly_page():
         max_score = float(np.max(res.anomaly_scores)) if len(res.anomaly_scores) > 0 else 0.0
         c4.metric("Максимальний бал аномальності", f"{max_score:.3f}")
 
-        # Графік PCA та Топ аномалій
         g_col1, g_col2 = st.columns([1, 1])
 
         with g_col1:
@@ -807,7 +910,6 @@ def render_anomaly_page():
         with g_col2:
             st.markdown(f"##### Топ-{len(res.top_anomalies_df)} найбільш нетипових записів")
             st.caption("Відсортовано за балом аномальності спадно. Стовпець `anomaly_reasons` містить z-score відхилення.")
-            # Показуємо зручний зріз
             preview_cols = [c for c in ["anomaly_score", "anomaly_reasons"] if c in res.top_anomalies_df.columns]
             other_cols = [c for c in res.top_anomalies_df.columns if c not in ["is_anomaly", "anomaly_score", "anomaly_reasons"]]
             show_df = res.top_anomalies_df[preview_cols + other_cols]
@@ -823,6 +925,31 @@ def render_anomaly_page():
             st.info(f"💡 **Як інтерпретувати результати:**\n\n{res.interpretation}")
         with lim_col:
             st.warning(f"⚠️ **Обмеження методу:**\n\n{res.limitations}")
+
+        # Збереження та експорт
+        st.markdown("---")
+        st.markdown("##### 💾 Експорт результатів аналізу аномалій")
+        d_col1, d_col2 = st.columns(2)
+
+        with d_col1:
+            csv_top = export_dataframe_to_csv(res.top_anomalies_df)
+            st.download_button(
+                label=f"📥 Завантажити Топ-{len(res.top_anomalies_df)} аномалій (CSV)",
+                data=csv_top,
+                file_name="top_anomalies.csv",
+                mime="text/csv",
+                key="dl_top_anomalies_csv",
+            )
+
+        with d_col2:
+            csv_enriched = export_dataframe_to_csv(res.enriched_df)
+            st.download_button(
+                label="📥 Завантажити повний збагачений датасет (CSV)",
+                data=csv_enriched,
+                file_name="enriched_dataset_with_anomalies.csv",
+                mime="text/csv",
+                key="dl_enriched_csv",
+            )
 
 
 def main():
