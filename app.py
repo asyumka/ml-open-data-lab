@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
+from src.anomaly import AnomalyDetectionResult, run_anomaly_detection
 from src.classification import (
     ClassificationResult,
     compare_classification_models,
@@ -18,6 +19,7 @@ from src.classification import (
 from src.data_loader import analyze_dataset, get_data_summary_table, load_dataset
 from src.plots import (
     plot_confusion_matrix,
+    plot_pca_anomalies,
     plot_regression_predictions,
     plot_regression_residuals,
 )
@@ -55,6 +57,8 @@ def init_session_state() -> None:
         st.session_state.classification_results = None
     if "regression_results" not in st.session_state:
         st.session_state.regression_results = None
+    if "anomaly_results" not in st.session_state:
+        st.session_state.anomaly_results = None
 
 
 def render_sidebar():
@@ -163,7 +167,6 @@ def render_data_page():
         )
         return
 
-    # Валідація датасету
     is_valid, validation_msgs = validate_dataframe(df, min_rows=30)
     for msg in validation_msgs:
         if "Увага" in msg or "рекомендований мінімум" in msg:
@@ -173,7 +176,6 @@ def render_data_page():
         else:
             st.info(f"ℹ️ {msg}")
 
-    # Метричні картки
     st.subheader(f"Джерело: `{dataset_name}`")
     col1, col2, col3, col4, col5 = st.columns(5)
     total_missing = sum(info.missing_counts.values())
@@ -186,7 +188,6 @@ def render_data_page():
     col4.metric("Категоріальних", f"{len(info.categorical_columns)}")
     col5.metric("Загалом пропусків", f"{total_missing:,} ({missing_pct_overall:.1f}%)")
 
-    # Попередження про високу кардинальність
     if info.high_cardinality_columns:
         st.warning(
             f"⚠️ Виявлено високо-кардинальні категоріальні стовпці (>50 унікальних значень): "
@@ -194,7 +195,6 @@ def render_data_page():
             "При OneHot-кодуванні такі ознаки можуть суттєво роздути розмірність."
         )
 
-    # Вкладки детального перегляду
     tab1, tab2, tab3 = st.tabs(["📋 Попередній перегляд (Preview)", "🔍 Структура та типи", "📈 Описова статистика"])
 
     with tab1:
@@ -250,7 +250,6 @@ def render_classification_page():
         "Усі перетворення виконуються всередині `sklearn.pipeline.Pipeline` без витоку даних."
     )
 
-    # 1. Вибір цільової змінної
     candidate_targets = [
         c for c in info.columns
         if (c in info.categorical_columns) or (c in info.numeric_columns and info.unique_counts.get(c, 0) <= 20)
@@ -270,7 +269,6 @@ def render_classification_page():
         if target_col:
             st.caption(f"Унікальних класів у цілі: **{df[target_col].nunique(dropna=True)}**")
 
-    # Валідація обраної цілі
     if target_col:
         is_target_valid, target_msgs, meta = validate_classification_target(df[target_col])
         for msg in target_msgs:
@@ -281,7 +279,6 @@ def render_classification_page():
         if not is_target_valid:
             return
 
-    # 2. Вибір ознак (X)
     available_features = [c for c in info.columns if c != target_col]
     default_features = [
         c for c in available_features
@@ -295,14 +292,12 @@ def render_classification_page():
         help="Ви можете комбінувати числові та категоріальні ознаки.",
     )
 
-    # Валідація вибору ознак
     is_feat_valid, feat_errors = validate_features_and_target(selected_features, target_col, require_target=True)
     if not is_feat_valid:
         for err in feat_errors:
             st.error(f"❌ {err}")
         return
 
-    # Попередження про високу кардинальність обраних ознак
     selected_high_cards = [c for c in selected_features if c in info.high_cardinality_columns]
     if selected_high_cards:
         st.warning(
@@ -310,7 +305,6 @@ def render_classification_page():
             "Це може створити велику кількість стовпців після OneHotEncoder."
         )
 
-    # 3. Налаштування поділу вибірки
     st.subheader("⚙️ Параметри поділу вибірки та моделювання")
     col_p1, col_p2, col_p3 = st.columns(3)
 
@@ -349,7 +343,6 @@ def render_classification_page():
         help="Призначає більшу вагу міноритарним (рідкісним) класам.",
     )
 
-    # 4. Запуск навчання
     if st.button("🚀 Навчити модель(і)", type="primary", use_container_width=True):
         with st.spinner("Триває підготовка конвеєра та навчання..."):
             num_feats = [c for c in selected_features if c in info.numeric_columns]
@@ -410,7 +403,6 @@ def render_classification_page():
                 st.error(f"❌ Виникла помилка під час навчання моделі: {e}")
                 return
 
-    # 5. Відображення результатів
     if st.session_state.classification_results is not None:
         results = st.session_state.classification_results
         st.markdown("---")
@@ -466,7 +458,6 @@ def render_regression_page():
         "Усі етапи масштабування та кодування захищені від витоку даних завдяки `Pipeline`."
     )
 
-    # 1. Вибір числової цільової змінної
     candidate_targets = info.numeric_columns
     if not candidate_targets:
         st.error("❌ У завантаженому наборі даних не виявлено числових стовпців для регресії.")
@@ -474,7 +465,6 @@ def render_regression_page():
 
     col_t1, col_t2 = st.columns([2, 1])
     with col_t1:
-        # Спробуємо підібрати типову цільову змінну, якщо є (наприклад 'price_usd')
         default_idx = 0
         for i, c in enumerate(candidate_targets):
             if any(kw in c.lower() for kw in ["price", "ціна", "сума", "cost", "target", "val"]):
@@ -494,7 +484,6 @@ def render_regression_page():
                 f"Сер.: `{df[target_col].mean():,.2f}`"
             )
 
-    # Валідація цілі
     if target_col:
         is_target_valid, target_msgs, meta = validate_regression_target(df[target_col])
         for msg in target_msgs:
@@ -505,7 +494,6 @@ def render_regression_page():
         if not is_target_valid:
             return
 
-    # 2. Вибір ознак (X)
     available_features = [c for c in info.columns if c != target_col]
     default_features = [
         c for c in available_features
@@ -519,14 +507,12 @@ def render_regression_page():
         help="Можна комбінувати числові та категоріальні ознаки.",
     )
 
-    # Валідація вибору ознак
     is_feat_valid, feat_errors = validate_features_and_target(selected_features, target_col, require_target=True)
     if not is_feat_valid:
         for err in feat_errors:
             st.error(f"❌ {err}")
         return
 
-    # 3. Параметри моделювання та поділу
     st.subheader("⚙️ Параметри поділу вибірки та регресійних моделей")
     col_p1, col_p2, col_p3 = st.columns(3)
 
@@ -572,7 +558,6 @@ def render_regression_page():
             help="Більше значення = сильніший штраф на ваги коефіцієнтів.",
         )
 
-    # 4. Запуск навчання
     if st.button("🚀 Навчити регресійну модель(і)", type="primary", use_container_width=True):
         with st.spinner("Навчання конвеєра регресії..."):
             num_feats = [c for c in selected_features if c in info.numeric_columns]
@@ -634,7 +619,6 @@ def render_regression_page():
                 st.error(f"❌ Помилка під час навчання регресійної моделі: {e}")
                 return
 
-    # 5. Відображення результатів
     if st.session_state.regression_results is not None:
         results = st.session_state.regression_results
         st.markdown("---")
@@ -684,6 +668,163 @@ def render_regression_page():
                     st.warning(f"⚠️ **Обмеження методу:**\n\n{res.limitations}")
 
 
+def render_anomaly_page():
+    """Відображає сторінку виявлення аномалій (Isolation Forest / LOF)."""
+    st.header("🔍 Виявлення аномалій у відкритих даних")
+
+    df = st.session_state.df
+    info = st.session_state.dataset_info
+
+    if df is None or info is None:
+        st.warning("⚠️ Спочатку завантажте дані у вкладці «Дані та огляд» або оберіть демо-набір у бічному меню.")
+        return
+
+    st.markdown(
+        "Автоматичний пошук нетипових спостережень, підозрілих витрат або рідкісних випадків (без вчителя). "
+        "Включає розрахунок балу аномальності, проекцію в 2D PCA простір та z-score аналіз відхилень."
+    )
+
+    # 1. Вибір ознак
+    available_features = [
+        c for c in info.columns
+        if c not in info.datetime_columns and c not in info.high_cardinality_columns
+    ]
+
+    selected_features = st.multiselect(
+        "Оберіть ознаки для аналізу аномалій:",
+        info.columns,
+        default=available_features if available_features else info.columns[:5],
+        help="Рекомендовано обирати числові та важливі категоріальні показники.",
+    )
+
+    if not selected_features:
+        st.error("❌ Оберіть хоча б одну ознаку для виявлення аномалій.")
+        return
+
+    # 2. Налаштування параметрів
+    st.subheader("⚙️ Параметри методів виявлення аномалій")
+    col_a1, col_a2, col_a3 = st.columns(3)
+
+    with col_a1:
+        model_choice = st.selectbox(
+            "Алгоритм пошуку аномалій:",
+            [
+                "Ізоляційний ліс (Isolation Forest)",
+                "Локальний фактор викиду (Local Outlier Factor)",
+            ],
+        )
+
+    with col_a2:
+        contamination_pct = st.slider(
+            "Очікувана частка аномалій (% Contamination):",
+            min_value=1.0,
+            max_value=20.0,
+            value=5.0,
+            step=1.0,
+            help="Частка найбільш віддалених записів, які алгоритм вважатиме аномальними.",
+        )
+        contamination = contamination_pct / 100.0
+
+    with col_a3:
+        top_n = st.slider(
+            "Кількість аномалій для детального перегляду (Топ-N):",
+            min_value=5,
+            max_value=50,
+            value=10,
+            step=5,
+        )
+
+    n_neighbors = 20
+    if "Local Outlier Factor" in model_choice:
+        n_neighbors = st.slider(
+            "Кількість сусідів для LOF (n_neighbors):",
+            min_value=5,
+            max_value=50,
+            value=20,
+            step=5,
+            help="Розмір локального околу для розрахунку щільності.",
+        )
+
+    # 3. Запуск аналізу
+    if st.button("🚀 Виявити аномалії", type="primary", use_container_width=True):
+        with st.spinner("Триває розрахунок аномалій, PCA проекції та z-score відхилень..."):
+            m_type = "isolation_forest" if "Isolation Forest" in model_choice else "local_outlier_factor"
+            num_feats = [c for c in selected_features if c in info.numeric_columns]
+            cat_feats = [c for c in selected_features if c in info.categorical_columns]
+
+            preprocessor = build_preprocessor(
+                numeric_features=num_feats,
+                categorical_features=cat_feats,
+                scale_numeric=True,
+                numeric_scaler="robust",  # RobustScaler стійкіший до викидів при пошуку аномалій
+                numeric_imputer="median",
+            )
+
+            try:
+                res = run_anomaly_detection(
+                    df=df,
+                    feature_cols=selected_features,
+                    preprocessor=preprocessor,
+                    model_type=m_type,
+                    contamination=contamination,
+                    n_neighbors=n_neighbors,
+                    top_n=top_n,
+                    random_state=42,
+                )
+                st.session_state.anomaly_results = res
+            except Exception as e:
+                st.error(f"❌ Помилка під час пошуку аномалій: {e}")
+                return
+
+    # 4. Відображення результатів
+    if st.session_state.anomaly_results is not None:
+        res: AnomalyDetectionResult = st.session_state.anomaly_results
+        st.markdown("---")
+        st.subheader(f"📊 Результати виявлення аномалій: {res.model_name}")
+
+        # ЖОРСТКА ВИМОГА: НЕ показувати accuracy!
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Всього записів у датасеті", f"{res.n_samples:,}")
+        c2.metric("Виявлено аномалій (шт)", f"{res.n_anomalies:,}")
+        c3.metric("Частка аномалій у вибірці", f"{res.anomaly_percentage:.1f}%")
+        max_score = float(np.max(res.anomaly_scores)) if len(res.anomaly_scores) > 0 else 0.0
+        c4.metric("Максимальний бал аномальності", f"{max_score:.3f}")
+
+        # Графік PCA та Топ аномалій
+        g_col1, g_col2 = st.columns([1, 1])
+
+        with g_col1:
+            st.markdown("##### 2D PCA проекція простору ознак")
+            fig_pca = plot_pca_anomalies(
+                pca_coords=res.pca_coords,
+                is_anomaly=res.is_anomaly_mask,
+                anomaly_scores=res.anomaly_scores,
+                title=f"PCA проекція ({res.model_name})",
+            )
+            st.pyplot(fig_pca)
+            plt.close(fig_pca)
+
+        with g_col2:
+            st.markdown(f"##### Топ-{len(res.top_anomalies_df)} найбільш нетипових записів")
+            st.caption("Відсортовано за балом аномальності спадно. Стовпець `anomaly_reasons` містить z-score відхилення.")
+            # Показуємо зручний зріз
+            preview_cols = [c for c in ["anomaly_score", "anomaly_reasons"] if c in res.top_anomalies_df.columns]
+            other_cols = [c for c in res.top_anomalies_df.columns if c not in ["is_anomaly", "anomaly_score", "anomaly_reasons"]]
+            show_df = res.top_anomalies_df[preview_cols + other_cols]
+            st.dataframe(show_df, use_container_width=True)
+
+        st.markdown("##### Повний збагачений набір даних")
+        with st.expander("Переглянути всю таблицю з доданими мітками `is_anomaly` та `anomaly_score`"):
+            st.dataframe(res.enriched_df, use_container_width=True)
+
+        st.markdown("---")
+        int_col, lim_col = st.columns(2)
+        with int_col:
+            st.info(f"💡 **Як інтерпретувати результати:**\n\n{res.interpretation}")
+        with lim_col:
+            st.warning(f"⚠️ **Обмеження методу:**\n\n{res.limitations}")
+
+
 def main():
     """Головна функція запуску застосунку."""
     init_session_state()
@@ -696,8 +837,7 @@ def main():
     elif mode == "📈 Регресія":
         render_regression_page()
     elif mode == "🔍 Виявлення аномалій":
-        st.header("🔍 Виявлення аномалій")
-        st.info("Модуль виявлення аномалій буде реалізовано на Етапі 5.")
+        render_anomaly_page()
 
 
 if __name__ == "__main__":
