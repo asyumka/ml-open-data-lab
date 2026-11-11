@@ -17,7 +17,12 @@ from src.classification import (
     create_classifier_pipeline,
     evaluate_classifier_model,
 )
-from src.data_loader import analyze_dataset, get_data_summary_table, load_dataset
+from src.data_loader import (
+    analyze_dataset,
+    get_data_summary_table,
+    load_dataset,
+    sample_dataframe,
+)
 from src.export import (
     export_dataframe_to_csv,
     export_metrics_summary_to_csv,
@@ -30,7 +35,7 @@ from src.plots import (
     plot_regression_predictions,
     plot_regression_residuals,
 )
-from src.preprocessing import build_preprocessor, split_data
+from src.preprocessing import build_preprocessor, filter_rare_classes, split_data
 from src.regression import (
     RegressionResult,
     compare_regression_models,
@@ -70,6 +75,14 @@ def init_session_state() -> None:
         st.session_state.cls_test_data = None
     if "reg_test_data" not in st.session_state:
         st.session_state.reg_test_data = None
+
+
+def get_working_df() -> Optional[pd.DataFrame]:
+    """Повертає робочий DataFrame для моделювання (з урахуванням ліміту рядків у бічній панелі)."""
+    df = st.session_state.df
+    if df is None:
+        return None
+    return sample_dataframe(df, int(st.session_state.get("sample_max_rows", 0)), random_state=42)
 
 
 def render_sidebar():
@@ -148,6 +161,20 @@ def render_sidebar():
             st.sidebar.error(f"Не вдалося зчитати файл: {e}")
 
     st.sidebar.markdown("---")
+    st.sidebar.subheader("⚡ Великі набори")
+    st.sidebar.number_input(
+        "Макс. рядків для моделювання (0 — усі):",
+        min_value=0,
+        value=0,
+        step=5000,
+        key="sample_max_rows",
+        help="Випадкова вибірка (random_state=42) для швидкої роботи з великими файлами. "
+        "LocalOutlierFactor на сотнях тисяч рядків надто повільний.",
+    )
+    if st.session_state.get("sample_max_rows", 0) > 0:
+        st.sidebar.caption("Увага: режими працюють на випадковій підвибірці.")
+
+    st.sidebar.markdown("---")
     st.sidebar.markdown(
         "💡 **Підказка:** Усі етапи підготовки використовують конвеєри "
         "`scikit-learn` без витоку інформації з тесту."
@@ -186,6 +213,18 @@ def render_data_page():
             st.error(f"❌ {msg}")
         else:
             st.info(f"ℹ️ {msg}")
+
+    skipped = int(df.attrs.get("skipped_rows", 0))
+    if skipped > 0:
+        st.warning(
+            f"⚠️ Під час читання файлу пропущено {skipped} рядків із некоректною структурою "
+            "(кількість полів не збігається із заголовком). Перевірте роздільник і лапки у файлі."
+        )
+    if info.id_like_columns:
+        st.warning(
+            f"⚠️ Стовпці схожі на ідентифікатори/коди: **{', '.join(info.id_like_columns)}**. "
+            "Це не вимірювані величини; вони виключені зі списків ознак за замовчуванням."
+        )
 
     st.subheader(f"Джерело: `{dataset_name}`")
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -249,7 +288,7 @@ def render_classification_page():
     """Відображає сторінку навчання та оцінювання класифікації."""
     st.header("🎯 Класифікація відкритих даних")
 
-    df = st.session_state.df
+    df = get_working_df()
     info = st.session_state.dataset_info
 
     if df is None or info is None:
@@ -281,6 +320,21 @@ def render_classification_page():
             st.caption(f"Унікальних класів у цілі: **{df[target_col].nunique(dropna=True)}**")
 
     if target_col:
+        min_class = st.number_input(
+            "Відкинути рідкісні класи цілі (мінімум записів у класі; 0 — не відкидати):",
+            min_value=0,
+            max_value=1000,
+            value=0,
+            step=1,
+            key="cls_min_class",
+            help="Класи з меншою кількістю записів неможливо коректно розділити на train/test.",
+        )
+        df, removed_classes = filter_rare_classes(df, target_col, int(min_class))
+        if removed_classes:
+            removed_total = sum(removed_classes.values())
+            removed_txt = ", ".join(f"«{k}» ({v})" for k, v in removed_classes.items())
+            st.info(f"ℹ️ Відкинуто рідкісні класи: {removed_txt}. Усього прибрано рядків: {removed_total}.")
+
         is_target_valid, target_msgs, meta = validate_classification_target(df[target_col])
         for msg in target_msgs:
             if not is_target_valid:
@@ -293,7 +347,9 @@ def render_classification_page():
     available_features = [c for c in info.columns if c != target_col]
     default_features = [
         c for c in available_features
-        if c not in info.datetime_columns and c not in info.high_cardinality_columns
+        if c not in info.datetime_columns
+        and c not in info.high_cardinality_columns
+        and c not in info.id_like_columns
     ]
 
     selected_features = st.multiselect(
@@ -501,7 +557,7 @@ def render_regression_page():
     """Відображає сторінку навчання та оцінювання регресії."""
     st.header("📈 Регресія відкритих даних")
 
-    df = st.session_state.df
+    df = get_working_df()
     info = st.session_state.dataset_info
 
     if df is None or info is None:
@@ -552,7 +608,9 @@ def render_regression_page():
     available_features = [c for c in info.columns if c != target_col]
     default_features = [
         c for c in available_features
-        if c not in info.datetime_columns and c not in info.high_cardinality_columns
+        if c not in info.datetime_columns
+        and c not in info.high_cardinality_columns
+        and c not in info.id_like_columns
     ]
 
     selected_features = st.multiselect(
@@ -781,7 +839,7 @@ def render_anomaly_page():
     """Відображає сторінку виявлення аномалій (Isolation Forest / LOF)."""
     st.header("🔍 Виявлення аномалій у відкритих даних")
 
-    df = st.session_state.df
+    df = get_working_df()
     info = st.session_state.dataset_info
 
     if df is None or info is None:
@@ -795,7 +853,9 @@ def render_anomaly_page():
 
     available_features = [
         c for c in info.columns
-        if c not in info.datetime_columns and c not in info.high_cardinality_columns
+        if c not in info.datetime_columns
+        and c not in info.high_cardinality_columns
+        and c not in info.id_like_columns
     ]
 
     selected_features = st.multiselect(

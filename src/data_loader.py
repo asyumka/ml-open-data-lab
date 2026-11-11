@@ -25,6 +25,31 @@ class DatasetInfo:
     missing_percentages: Dict[str, float]
     unique_counts: Dict[str, int]
     column_dtypes: Dict[str, str]
+    # Числові стовпці, схожі на ідентифікатори/коди (не є вимірюваними величинами)
+    id_like_columns: List[str] = field(default_factory=list)
+
+
+_ID_NAME_PATTERN = r"(?:^|[^a-z0-9])(?:id|code|index|edrpou|koatuu)(?:[^a-z0-9]|$)"
+
+
+def _is_id_like(series: pd.Series, name: str) -> bool:
+    """Евристика: числовий стовпець є ідентифікатором/кодом, а не величиною.
+
+    Ознаки: цілі значення, і або майже всі значення унікальні (≥95%), або назва
+    містить типовий маркер (id, code, index, edrpou, koatuu). Це лише привід
+    для попередження користувача, а не автоматичне виключення з даних.
+    """
+    non_null = series.dropna()
+    if non_null.empty:
+        return False
+    is_integer = bool((non_null % 1 == 0).all())
+    if not is_integer:
+        return False
+    import re
+
+    unique_ratio = non_null.nunique() / len(non_null)
+    name_match = re.search(_ID_NAME_PATTERN, str(name).lower()) is not None
+    return unique_ratio >= 0.95 or name_match
 
 
 def detect_csv_delimiter(sample_text: str) -> str:
@@ -66,6 +91,51 @@ def detect_csv_delimiter(sample_text: str) -> str:
             best_delim = cand
 
     return best_delim if max_score > 0 else ","
+
+
+def _count_csv_records(
+    file_source: Union[str, BinaryIO, io.BytesIO], encoding: str, delimiter: str
+) -> int:
+    """Рахує кількість записів CSV (разом із заголовком) за допомогою модуля csv.
+
+    Args:
+        file_source: Шлях до файлу або бінарний потік.
+        encoding: Кодування тексту.
+        delimiter: Роздільник полів.
+
+    Returns:
+        Кількість записів; 0, якщо підрахунок неможливий.
+    """
+    try:
+        if isinstance(file_source, str):
+            handle = open(file_source, "r", encoding=encoding, errors="ignore", newline="")
+        else:
+            handle = io.TextIOWrapper(file_source, encoding=encoding, errors="ignore", newline="")
+        try:
+            return sum(1 for _ in csv.reader(handle, delimiter=delimiter))
+        finally:
+            if isinstance(file_source, str):
+                handle.close()
+            else:
+                handle.detach()  # не закриваємо переданий потік
+    except Exception:
+        return 0
+
+
+def sample_dataframe(df: pd.DataFrame, max_rows: int, random_state: int = 42) -> pd.DataFrame:
+    """Повертає випадкову вибірку не більше `max_rows` рядків (для важких наборів).
+
+    Args:
+        df: Вхідний DataFrame.
+        max_rows: Максимальна кількість рядків; 0 або від'ємне значення — без обмеження.
+        random_state: Сід для відтворюваності.
+
+    Returns:
+        Вихідний DataFrame, якщо він не більший за ліміт, інакше випадкова підвибірка.
+    """
+    if max_rows <= 0 or len(df) <= max_rows:
+        return df
+    return df.sample(n=max_rows, random_state=random_state)
 
 
 def load_dataset(
@@ -125,6 +195,12 @@ def load_dataset(
             encoding=encoding,
             on_bad_lines="skip",
         )
+        # Рядки з неправильною кількістю полів pandas пропускає мовчки, тому
+        # порівнюємо з кількістю записів за csv-модулем і повідомляємо про втрату.
+        if hasattr(file_source, "seek"):
+            file_source.seek(0)
+        total_records = _count_csv_records(file_source, encoding, chosen_delim)
+        df.attrs["skipped_rows"] = max(0, total_records - 1 - len(df))
         return df
 
     except UnicodeDecodeError as err:
@@ -151,7 +227,7 @@ def analyze_dataset(df: pd.DataFrame) -> DatasetInfo:
     categorical_cols: List[str] = []
     datetime_cols: List[str] = []
     high_cardinality_cols: List[str] = []
-
+    id_like_cols: List[str] = []
     missing_counts: Dict[str, int] = {}
     missing_percentages: Dict[str, float] = {}
     unique_counts: Dict[str, int] = {}
@@ -178,6 +254,8 @@ def analyze_dataset(df: pd.DataFrame) -> DatasetInfo:
             # Якщо мало унікальних значень і це int/bool — може бути категорією або цільовою міткою
             numeric_cols.append(str(col))
             column_dtypes[str(col)] = "numeric"
+            if _is_id_like(series, str(col)):
+                id_like_cols.append(str(col))
             continue
 
         # 3. Перевірка об'єктних/рядкових колонок на дату
@@ -191,7 +269,11 @@ def analyze_dataset(df: pd.DataFrame) -> DatasetInfo:
             )
             if has_date_symbols:
                 try:
-                    converted = pd.to_datetime(sample_non_null, errors="coerce")
+                    import warnings
+
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", UserWarning)
+                        converted = pd.to_datetime(sample_non_null, errors="coerce")
                     if converted.notna().sum() >= 0.8 * len(sample_non_null):
                         is_date = True
                 except Exception:
@@ -218,6 +300,7 @@ def analyze_dataset(df: pd.DataFrame) -> DatasetInfo:
         missing_percentages=missing_percentages,
         unique_counts=unique_counts,
         column_dtypes=column_dtypes,
+        id_like_columns=id_like_cols,
     )
 
 

@@ -40,3 +40,6 @@ htmlcov/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Великі набори даних (понад 100 МБ, ліміт GitHub) - передавати окремо
+data/reestrTZ2022.csv

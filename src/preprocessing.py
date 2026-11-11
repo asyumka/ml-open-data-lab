@@ -1,7 +1,7 @@
 """Модуль побудови Pipeline та ColumnTransformer без витоку даних (Data Leakage Free)."""
 from __future__ import annotations
 
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
@@ -66,6 +66,32 @@ def build_preprocessor(
         remainder="drop",
     )
     return preprocessor
+
+
+def filter_rare_classes(
+    df: pd.DataFrame, target_col: str, min_count: int
+) -> Tuple[pd.DataFrame, Dict[str, int]]:
+    """Відкидає рядки, клас цілі яких зустрічається менше `min_count` разів.
+
+    Фільтрація залежить лише від частот у цілі (не від тесту), тому не створює
+    витоку; її слід застосовувати ДО поділу на train/test.
+
+    Args:
+        df: Вхідний DataFrame.
+        target_col: Назва цільового стовпця.
+        min_count: Мінімальна кількість записів у класі; значення ≤ 1 вимикає фільтр.
+
+    Returns:
+        Кортеж (відфільтрований DataFrame, словник {клас: кількість прибраних рядків}).
+    """
+    if min_count <= 1:
+        return df, {}
+    counts = df[target_col].value_counts()
+    rare = counts[counts < min_count]
+    if rare.empty:
+        return df, {}
+    filtered = df[~df[target_col].isin(rare.index)]
+    return filtered, {str(k): int(v) for k, v in rare.items()}
 
 
 def split_data(
