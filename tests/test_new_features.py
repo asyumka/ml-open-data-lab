@@ -58,3 +58,43 @@ def test_filter_rare_classes():
     assert len(out) == 15 and "C" not in set(out["y"])
     same, none = filter_rare_classes(df, "y", 0)
     assert none == {} and len(same) == 16
+
+def test_decimal_comma_text_becomes_numeric():
+    """Текстовий стовпець із десятковою комою та пропусками стає числовим."""
+    from src.data_loader import coerce_numeric_like_columns
+
+    df = pd.DataFrame({"w": ["1250,5", "980", None, "1,25", "300"] * 10, "name": ["a", "b", "c", "d", "e"] * 10})
+    out = coerce_numeric_like_columns(df)
+    assert pd.api.types.is_numeric_dtype(out["w"])
+    assert out["w"].iloc[0] == 1250.5
+    assert not pd.api.types.is_numeric_dtype(out["name"])
+    assert out.attrs["numeric_converted"] == ["w"]
+
+
+def test_codes_with_leading_zeros_stay_text():
+    """Коди з провідними нулями не перетворюються на числа."""
+    from src.data_loader import coerce_numeric_like_columns
+
+    df = pd.DataFrame({"code": ["0123", "0456", "0789"] * 10})
+    assert not pd.api.types.is_numeric_dtype(coerce_numeric_like_columns(df)["code"])
+
+
+def test_dayfirst_dates_detected_and_sorted():
+    """Формат дд.мм.рррр розпізнається як дата й коректно сортується."""
+    from src.data_loader import parse_dates_flexible
+
+    s = pd.Series(["31.01.2021", "05.02.2021", "15.03.2021", "02.01.2021"] * 5)
+    parsed = parse_dates_flexible(s)
+    assert parsed.notna().all()
+    assert parsed.iloc[0] == pd.Timestamp("2021-01-31")
+    info = analyze_dataset(pd.DataFrame({"d": s, "v": range(20)}))
+    assert "d" in info.datetime_columns
+
+
+def test_encoder_handles_mixed_types_in_categorical_column():
+    """Змішані типи (рядки, числа, NaN) в одній категоріальній ознаці не ламають конвеєр."""
+    from src.preprocessing import build_preprocessor
+
+    df = pd.DataFrame({"c": ["a", 1, 2.5, None, "a", 1] * 5})
+    out = build_preprocessor([], ["c"]).fit_transform(df)
+    assert out.shape[0] == len(df)

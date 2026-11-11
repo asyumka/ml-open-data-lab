@@ -1,0 +1,627 @@
+{
+  "house_prices": {
+    "shape": [
+      1460,
+      81
+    ],
+    "split": "Випадковий поділ без стратифікації (random_state=42): Train=1168 зр., Test=292 зр.",
+    "features": [
+      "OverallQual",
+      "GrLivArea",
+      "TotalBsmtSF",
+      "GarageCars",
+      "YearBuilt",
+      "LotArea",
+      "Neighborhood",
+      "ExterQual",
+      "KitchenQual",
+      "BldgType"
+    ],
+    "numeric": [
+      "OverallQual",
+      "GrLivArea",
+      "TotalBsmtSF",
+      "GarageCars",
+      "YearBuilt",
+      "LotArea"
+    ],
+    "categorical": [
+      "Neighborhood",
+      "ExterQual",
+      "KitchenQual",
+      "BldgType"
+    ],
+    "models": {
+      "Ridge": {
+        "MAE": 20381.71595046233,
+        "RMSE": 33077.275013044375,
+        "R2": 0.8573585930069847
+      },
+      "RandomForestRegressor": {
+        "MAE": 18105.819799412915,
+        "RMSE": 28627.905428101316,
+        "R2": 0.89315226666209
+      }
+    },
+    "worst_errors": [
+      {
+        "index": 898,
+        "fact": 611657.0,
+        "pred": 427273.18,
+        "Neighborhood": "NridgHt",
+        "GrLivArea": 2364.0
+      },
+      {
+        "index": 691,
+        "fact": 755000.0,
+        "pred": 623737.7,
+        "Neighborhood": "NoRidge",
+        "GrLivArea": 4316.0
+      },
+      {
+        "index": 581,
+        "fact": 253293.0,
+        "pred": 381137.89,
+        "Neighborhood": "NridgHt",
+        "GrLivArea": 2042.0
+      },
+      {
+        "index": 218,
+        "fact": 311500.0,
+        "pred": 209532.65,
+        "Neighborhood": "Crawfor",
+        "GrLivArea": 1954.0
+      },
+      {
+        "index": 1046,
+        "fact": 556581.0,
+        "pred": 469390.39,
+        "Neighborhood": "StoneBr",
+        "GrLivArea": 2868.0
+      }
+    ],
+    "y_stats": {
+      "count": 1460.0,
+      "mean": 180921.19589041095,
+      "std": 79442.50288288662,
+      "min": 34900.0,
+      "25%": 129975.0,
+      "50%": 163000.0,
+      "75%": 214000.0,
+      "max": 755000.0
+    },
+    "seconds": 1.9,
+    "dirty_text_target": {
+      "valid": false,
+      "message": "Цільова змінна 'Neighborhood' не є числовою і містить текстові значення. Для регресії цільова змінна обов'язково має бути числовим показником (наприклад, ціна, площа, кількість)."
+    }
+  },
+  "hei": {
+    "shape": [
+      1163,
+      26
+    ],
+    "skipped_rows": 94,
+    "id_like": [
+      "university_id",
+      "university_parent_id",
+      "university_edrpou",
+      "post_index",
+      "koatuu_id",
+      "koatuu_id_u"
+    ],
+    "class_counts_raw": {
+      "Державна": 739,
+      "Приватна": 351,
+      "Комунальна": 72,
+      "Корпоративна": 1
+    },
+    "validation_without_filter": {
+      "valid": false,
+      "message": "Виявлено класи з надто малою кількістю зразків (< 2): 'Корпоративна' (1 зр.). Неможливо виконати стратифікований поділ на train/test. Об'єднайте або відфільтруйте рідкісні класи."
+    },
+    "removed_classes": {
+      "Корпоративна": 1
+    },
+    "rows_after_filter": 1162,
+    "split": "Випадковий стратифікований поділ (random_state=42): Train=929 зр., Test=233 зр.",
+    "features": [
+      "education_type_name",
+      "university_type_name",
+      "region_name",
+      "registration_year"
+    ],
+    "validation_after_filter": [
+      "Попередження: виявлено помітний дисбаланс класів (співвідношення мажоритарного до міноритарного — 10.3:1). Рекомендується увімкнути зважування класів (class_weight='balanced')."
+    ],
+    "test_class_counts": {
+      "Державна": 148,
+      "Приватна": 70,
+      "Комунальна": 15
+    },
+    "models": {
+      "LogisticRegression": {
+        "accuracy": 0.5665236051502146,
+        "precision_macro": 0.5295104895104895,
+        "recall_macro": 0.5875589875589876,
+        "f1_macro": 0.4925014253489006,
+        "classes": [
+          "Державна",
+          "Комунальна",
+          "Приватна"
+        ],
+        "confusion_matrix": [
+          [
+            72,
+            34,
+            42
+          ],
+          [
+            1,
+            8,
+            6
+          ],
+          [
+            5,
+            13,
+            52
+          ]
+        ],
+        "report": {
+          "precision": {
+            "Державна": 0.923,
+            "Комунальна": 0.145,
+            "Приватна": 0.52,
+            "accuracy": 0.567,
+            "macro avg": 0.53,
+            "weighted avg": 0.752
+          },
+          "recall": {
+            "Державна": 0.486,
+            "Комунальна": 0.533,
+            "Приватна": 0.743,
+            "accuracy": 0.567,
+            "macro avg": 0.588,
+            "weighted avg": 0.567
+          },
+          "f1-score": {
+            "Державна": 0.637,
+            "Комунальна": 0.229,
+            "Приватна": 0.612,
+            "accuracy": 0.567,
+            "macro avg": 0.493,
+            "weighted avg": 0.603
+          },
+          "support": {
+            "Державна": 148.0,
+            "Комунальна": 15.0,
+            "Приватна": 70.0,
+            "accuracy": 0.567,
+            "macro avg": 233.0,
+            "weighted avg": 233.0
+          }
+        }
+      },
+      "RandomForestClassifier": {
+        "accuracy": 0.6566523605150214,
+        "precision_macro": 0.4705653021442495,
+        "recall_macro": 0.48251823251823245,
+        "f1_macro": 0.4716103202846975,
+        "classes": [
+          "Державна",
+          "Комунальна",
+          "Приватна"
+        ],
+        "confusion_matrix": [
+          [
+            105,
+            7,
+            36
+          ],
+          [
+            7,
+            1,
+            7
+          ],
+          [
+            21,
+            2,
+            47
+          ]
+        ],
+        "report": {
+          "precision": {
+            "Державна": 0.789,
+            "Комунальна": 0.1,
+            "Приватна": 0.522,
+            "accuracy": 0.657,
+            "macro avg": 0.471,
+            "weighted avg": 0.665
+          },
+          "recall": {
+            "Державна": 0.709,
+            "Комунальна": 0.067,
+            "Приватна": 0.671,
+            "accuracy": 0.657,
+            "macro avg": 0.483,
+            "weighted avg": 0.657
+          },
+          "f1-score": {
+            "Державна": 0.747,
+            "Комунальна": 0.08,
+            "Приватна": 0.588,
+            "accuracy": 0.657,
+            "macro avg": 0.472,
+            "weighted avg": 0.656
+          },
+          "support": {
+            "Державна": 148.0,
+            "Комунальна": 15.0,
+            "Приватна": 70.0,
+            "accuracy": 0.657,
+            "macro avg": 233.0,
+            "weighted avg": 233.0
+          }
+        }
+      }
+    },
+    "error_examples": [
+      {
+        "education_type_name": "Коледж",
+        "university_type_name": "Заклад вищої освіти",
+        "region_name": "ДНІПРОПЕТРОВСЬКА ОБЛАСТЬ",
+        "registration_year": "1899.0",
+        "fact": "Державна",
+        "pred": "Комунальна"
+      },
+      {
+        "education_type_name": "Університет",
+        "university_type_name": "Заклад вищої освіти",
+        "region_name": "ІВАНО-ФРАНКІВСЬКА ОБЛАСТЬ",
+        "registration_year": "1967.0",
+        "fact": "Державна",
+        "pred": "Приватна"
+      },
+      {
+        "education_type_name": "Інститут",
+        "university_type_name": "Заклад вищої освіти",
+        "region_name": "ДНІПРОПЕТРОВСЬКА ОБЛАСТЬ",
+        "registration_year": "2000.0",
+        "fact": "Державна",
+        "pred": "Приватна"
+      },
+      {
+        "education_type_name": "Інститут",
+        "university_type_name": "Заклад вищої освіти",
+        "region_name": "ІВАНО-ФРАНКІВСЬКА ОБЛАСТЬ",
+        "registration_year": "1997.0",
+        "fact": "Державна",
+        "pred": "Приватна"
+      },
+      {
+        "education_type_name": "Університет",
+        "university_type_name": "Заклад вищої освіти",
+        "region_name": "ДОНЕЦЬКА ОБЛАСТЬ",
+        "registration_year": "1992.0",
+        "fact": "Приватна",
+        "pred": "Державна"
+      },
+      {
+        "education_type_name": "Інститут",
+        "university_type_name": "Заклад вищої освіти",
+        "region_name": "ЗАКАРПАТСЬКА ОБЛАСТЬ",
+        "registration_year": "2000.0",
+        "fact": "Приватна",
+        "pred": "Комунальна"
+      }
+    ],
+    "seconds": 0.9
+  },
+  "tz": {
+    "shape": [
+      443599,
+      20
+    ],
+    "load_seconds": 16.3,
+    "datetime_columns": [
+      "D_REG"
+    ],
+    "id_like": [
+      "REG_ADDR_KOATUU",
+      "OPER_CODE",
+      "DEP_CODE"
+    ],
+    "high_cardinality": [
+      "OPER_NAME",
+      "DEP",
+      "BRAND",
+      "MODEL",
+      "VIN",
+      "BODY",
+      "N_REG_NEW"
+    ],
+    "period": [
+      "2021-01-03",
+      "2021-03-31"
+    ],
+    "capacity_stats": {
+      "count": 419544.0,
+      "mean": 2367.918833304731,
+      "std": 2101.457052111511,
+      "min": 0.0,
+      "25%": 1500.0,
+      "50%": 1870.0,
+      "75%": 2360.0,
+      "max": 67024.0
+    },
+    "sample_rows": 20000,
+    "features": [
+      "MAKE_YEAR",
+      "CAPACITY",
+      "OWN_WEIGHT",
+      "TOTAL_WEIGHT",
+      "KIND",
+      "FUEL"
+    ],
+    "contamination": 0.01,
+    "models": {
+      "IsolationForest": {
+        "n_anomalies": 200,
+        "seconds": 0.6,
+        "top10": [
+          {
+            "BRAND": "MAN",
+            "MODEL": "A 23",
+            "KIND": "АВТОБУС",
+            "FUEL": "ГАЗ",
+            "MAKE_YEAR": "2004",
+            "CAPACITY": "12816.0",
+            "OWN_WEIGHT": "17950.0",
+            "TOTAL_WEIGHT": "28000.0",
+            "anomaly_score": "0.0756",
+            "anomaly_reasons": "OWN_WEIGHT (z=+8.17σ); CAPACITY (z=+4.97σ); TOTAL_WEIGHT (z=+3.81σ)"
+          },
+          {
+            "BRAND": "NEOPLAN",
+            "MODEL": "N 122",
+            "KIND": "АВТОБУС",
+            "FUEL": "ДИЗЕЛЬНЕ ПАЛИВО",
+            "MAKE_YEAR": "1998",
+            "CAPACITY": "14618.0",
+            "OWN_WEIGHT": "17190.0",
+            "TOTAL_WEIGHT": "24000.0",
+            "anomaly_score": "0.0706",
+            "anomaly_reasons": "OWN_WEIGHT (z=+7.78σ); CAPACITY (z=+5.82σ); TOTAL_WEIGHT (z=+3.19σ)"
+          },
+          {
+            "BRAND": "MERCEDES-BENZ",
+            "MODEL": "O 530",
+            "KIND": "АВТОБУС",
+            "FUEL": "ГАЗ",
+            "MAKE_YEAR": "2007",
+            "CAPACITY": "11997.0",
+            "OWN_WEIGHT": "12525.0",
+            "TOTAL_WEIGHT": "17900.0",
+            "anomaly_score": "0.0648",
+            "anomaly_reasons": "OWN_WEIGHT (z=+5.40σ); CAPACITY (z=+4.59σ); TOTAL_WEIGHT (z=+2.23σ)"
+          },
+          {
+            "BRAND": "МАЗ",
+            "MODEL": "215069",
+            "KIND": "АВТОБУС",
+            "FUEL": "ДИЗЕЛЬНЕ ПАЛИВО",
+            "MAKE_YEAR": "2021",
+            "CAPACITY": "7201.0",
+            "OWN_WEIGHT": "17150.0",
+            "TOTAL_WEIGHT": "28000.0",
+            "anomaly_score": "0.0639",
+            "anomaly_reasons": "OWN_WEIGHT (z=+7.76σ); TOTAL_WEIGHT (z=+3.81σ); CAPACITY (z=+2.33σ)"
+          },
+          {
+            "BRAND": "МАЗ",
+            "MODEL": "215069",
+            "KIND": "АВТОБУС",
+            "FUEL": "ДИЗЕЛЬНЕ ПАЛИВО",
+            "MAKE_YEAR": "2021",
+            "CAPACITY": "7201.0",
+            "OWN_WEIGHT": "17150.0",
+            "TOTAL_WEIGHT": "28000.0",
+            "anomaly_score": "0.0639",
+            "anomaly_reasons": "OWN_WEIGHT (z=+7.76σ); TOTAL_WEIGHT (z=+3.81σ); CAPACITY (z=+2.33σ)"
+          },
+          {
+            "BRAND": "MERCEDES-BENZ",
+            "MODEL": "O 530",
+            "KIND": "АВТОБУС",
+            "FUEL": "ГАЗ",
+            "MAKE_YEAR": "2008",
+            "CAPACITY": "11967.0",
+            "OWN_WEIGHT": "11770.0",
+            "TOTAL_WEIGHT": "18000.0",
+            "anomaly_score": "0.0638",
+            "anomaly_reasons": "OWN_WEIGHT (z=+5.02σ); CAPACITY (z=+4.57σ); TOTAL_WEIGHT (z=+2.25σ)"
+          },
+          {
+            "BRAND": "NEOPLAN",
+            "MODEL": "116",
+            "KIND": "АВТОБУС",
+            "FUEL": "ДИЗЕЛЬНЕ ПАЛИВО",
+            "MAKE_YEAR": "1992",
+            "CAPACITY": "18273.0",
+            "OWN_WEIGHT": "14500.0",
+            "TOTAL_WEIGHT": "17500.0",
+            "anomaly_score": "0.0629",
+            "anomaly_reasons": "CAPACITY (z=+7.54σ); OWN_WEIGHT (z=+6.41σ); TOTAL_WEIGHT (z=+2.17σ)"
+          },
+          {
+            "BRAND": "МАЗ",
+            "MODEL": "215069",
+            "KIND": "АВТОБУС",
+            "FUEL": "ДИЗЕЛЬНЕ ПАЛИВО",
+            "MAKE_YEAR": "2020",
+            "CAPACITY": "7201.0",
+            "OWN_WEIGHT": "17150.0",
+            "TOTAL_WEIGHT": "28000.0",
+            "anomaly_score": "0.0622",
+            "anomaly_reasons": "OWN_WEIGHT (z=+7.76σ); TOTAL_WEIGHT (z=+3.81σ); CAPACITY (z=+2.33σ)"
+          },
+          {
+            "BRAND": "МАЗ",
+            "MODEL": "215069",
+            "KIND": "АВТОБУС",
+            "FUEL": "ДИЗЕЛЬНЕ ПАЛИВО",
+            "MAKE_YEAR": "2020",
+            "CAPACITY": "7201.0",
+            "OWN_WEIGHT": "17150.0",
+            "TOTAL_WEIGHT": "28000.0",
+            "anomaly_score": "0.0622",
+            "anomaly_reasons": "OWN_WEIGHT (z=+7.76σ); TOTAL_WEIGHT (z=+3.81σ); CAPACITY (z=+2.33σ)"
+          },
+          {
+            "BRAND": "МАЗ",
+            "MODEL": "215069",
+            "KIND": "АВТОБУС",
+            "FUEL": "ДИЗЕЛЬНЕ ПАЛИВО",
+            "MAKE_YEAR": "2020",
+            "CAPACITY": "7201.0",
+            "OWN_WEIGHT": "17150.0",
+            "TOTAL_WEIGHT": "28000.0",
+            "anomaly_score": "0.0622",
+            "anomaly_reasons": "OWN_WEIGHT (z=+7.76σ); TOTAL_WEIGHT (z=+3.81σ); CAPACITY (z=+2.33σ)"
+          }
+        ]
+      },
+      "LocalOutlierFactor": {
+        "n_anomalies": 200,
+        "seconds": 2.7,
+        "top10": [
+          {
+            "BRAND": "KIA",
+            "MODEL": "SPORTAGE",
+            "KIND": "ЛЕГКОВИЙ",
+            "FUEL": "БЕНЗИН",
+            "MAKE_YEAR": "2020",
+            "CAPACITY": "1591.0",
+            "OWN_WEIGHT": "1554.0",
+            "TOTAL_WEIGHT": "2000.0",
+            "anomaly_score": "872259198.844",
+            "anomaly_reasons": "MAKE_YEAR (z=+1.33σ); CAPACITY (z=-0.31σ); TOTAL_WEIGHT (z=-0.25σ)"
+          },
+          {
+            "BRAND": "KIA",
+            "MODEL": "SPORTAGE",
+            "KIND": "ЛЕГКОВИЙ",
+            "FUEL": "БЕНЗИН",
+            "MAKE_YEAR": "2020",
+            "CAPACITY": "1591.0",
+            "OWN_WEIGHT": "1554.0",
+            "TOTAL_WEIGHT": "2000.0",
+            "anomaly_score": "872259198.844",
+            "anomaly_reasons": "MAKE_YEAR (z=+1.33σ); CAPACITY (z=-0.31σ); TOTAL_WEIGHT (z=-0.25σ)"
+          },
+          {
+            "BRAND": "KIA",
+            "MODEL": "SPORTAGE",
+            "KIND": "ЛЕГКОВИЙ",
+            "FUEL": "БЕНЗИН",
+            "MAKE_YEAR": "2020",
+            "CAPACITY": "1591.0",
+            "OWN_WEIGHT": "1592.0",
+            "TOTAL_WEIGHT": "2050.0",
+            "anomaly_score": "838573517.8895",
+            "anomaly_reasons": "MAKE_YEAR (z=+1.33σ); CAPACITY (z=-0.31σ); TOTAL_WEIGHT (z=-0.25σ)"
+          },
+          {
+            "BRAND": "KIA",
+            "MODEL": "SPORTAGE",
+            "KIND": "ЛЕГКОВИЙ",
+            "FUEL": "БЕНЗИН",
+            "MAKE_YEAR": "2019",
+            "CAPACITY": "1591.0",
+            "OWN_WEIGHT": "1514.0",
+            "TOTAL_WEIGHT": "2050.0",
+            "anomaly_score": "800000001.0",
+            "anomaly_reasons": "MAKE_YEAR (z=+1.21σ); CAPACITY (z=-0.31σ); TOTAL_WEIGHT (z=-0.25σ)"
+          },
+          {
+            "BRAND": "KIA",
+            "MODEL": "SPORTAGE",
+            "KIND": "ЛЕГКОВИЙ",
+            "FUEL": "БЕНЗИН",
+            "MAKE_YEAR": "2019",
+            "CAPACITY": "1591.0",
+            "OWN_WEIGHT": "1514.0",
+            "TOTAL_WEIGHT": "2050.0",
+            "anomaly_score": "800000001.0",
+            "anomaly_reasons": "MAKE_YEAR (z=+1.21σ); CAPACITY (z=-0.31σ); TOTAL_WEIGHT (z=-0.25σ)"
+          },
+          {
+            "BRAND": "KIA",
+            "MODEL": "SPORTAGE",
+            "KIND": "ЛЕГКОВИЙ",
+            "FUEL": "БЕНЗИН",
+            "MAKE_YEAR": "2019",
+            "CAPACITY": "1591.0",
+            "OWN_WEIGHT": "1514.0",
+            "TOTAL_WEIGHT": "2050.0",
+            "anomaly_score": "800000001.0",
+            "anomaly_reasons": "MAKE_YEAR (z=+1.21σ); CAPACITY (z=-0.31σ); TOTAL_WEIGHT (z=-0.25σ)"
+          },
+          {
+            "BRAND": "KIA",
+            "MODEL": "SPORTAGE",
+            "KIND": "ЛЕГКОВИЙ",
+            "FUEL": "БЕНЗИН",
+            "MAKE_YEAR": "2019",
+            "CAPACITY": "1591.0",
+            "OWN_WEIGHT": "1514.0",
+            "TOTAL_WEIGHT": "2050.0",
+            "anomaly_score": "800000001.0",
+            "anomaly_reasons": "MAKE_YEAR (z=+1.21σ); CAPACITY (z=-0.31σ); TOTAL_WEIGHT (z=-0.25σ)"
+          },
+          {
+            "BRAND": "KIA",
+            "MODEL": "SPORTAGE",
+            "KIND": "ЛЕГКОВИЙ",
+            "FUEL": "БЕНЗИН",
+            "MAKE_YEAR": "2019",
+            "CAPACITY": "1591.0",
+            "OWN_WEIGHT": "1514.0",
+            "TOTAL_WEIGHT": "2050.0",
+            "anomaly_score": "800000001.0",
+            "anomaly_reasons": "MAKE_YEAR (z=+1.21σ); CAPACITY (z=-0.31σ); TOTAL_WEIGHT (z=-0.25σ)"
+          },
+          {
+            "BRAND": "KIA",
+            "MODEL": "SPORTAGE",
+            "KIND": "ЛЕГКОВИЙ",
+            "FUEL": "БЕНЗИН",
+            "MAKE_YEAR": "2020",
+            "CAPACITY": "1591.0",
+            "OWN_WEIGHT": "1557.0",
+            "TOTAL_WEIGHT": "2050.0",
+            "anomaly_score": "699611292.3027",
+            "anomaly_reasons": "MAKE_YEAR (z=+1.33σ); CAPACITY (z=-0.31σ); TOTAL_WEIGHT (z=-0.25σ)"
+          },
+          {
+            "BRAND": "PEUGEOT",
+            "MODEL": "3008",
+            "KIND": "ЛЕГКОВИЙ",
+            "FUEL": "БЕНЗИН",
+            "MAKE_YEAR": "2018",
+            "CAPACITY": "1598.0",
+            "OWN_WEIGHT": "1465.0",
+            "TOTAL_WEIGHT": "2090.0",
+            "anomaly_score": "521356328.1298",
+            "anomaly_reasons": "MAKE_YEAR (z=+1.09σ); CAPACITY (z=-0.30σ); TOTAL_WEIGHT (z=-0.24σ)"
+          }
+        ]
+      }
+    },
+    "overlap": {
+      "intersection": 3,
+      "union": 397,
+      "jaccard": 0.008
+    }
+  }
+}

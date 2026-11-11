@@ -93,6 +93,58 @@ def detect_csv_delimiter(sample_text: str) -> str:
     return best_delim if max_score > 0 else ","
 
 
+def parse_dates_flexible(series: pd.Series) -> pd.Series:
+    """Розбирає дати, обираючи між форматами «місяць-перший» і «день-перший».
+
+    Українські відкриті дані зазвичай мають формат дд.мм.рррр, який стандартний
+    розбір pandas обробляє неправильно (для днів > 12 повертає NaT).
+
+    Args:
+        series: Серія з текстовими (або вже datetime) значеннями дат.
+
+    Returns:
+        Серія datetime64; нерозпізнані значення — NaT.
+    """
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        month_first = pd.to_datetime(series, errors="coerce")
+        day_first = pd.to_datetime(series, errors="coerce", dayfirst=True)
+    return day_first if day_first.notna().sum() > month_first.notna().sum() else month_first
+
+
+def coerce_numeric_like_columns(df: pd.DataFrame, min_share: float = 0.95) -> pd.DataFrame:
+    """Перетворює текстові стовпці з числами (зокрема з десятковою комою) на числові.
+
+    Українські реєстри часто містять «1250,5» або суміш рядків і чисел. Стовпець
+    конвертується, якщо щонайменше `min_share` непорожніх значень розпізнано як числа.
+    Стовпці з провідними нулями (поштові індекси, коди) не чіпаються.
+
+    Args:
+        df: Вхідний DataFrame (змінюється на місці).
+        min_share: Мінімальна частка значень, що мають бути числовими.
+
+    Returns:
+        Той самий DataFrame; список перетворених стовпців — у `df.attrs["numeric_converted"]`.
+    """
+    converted: List[str] = []
+    for col in df.select_dtypes(include="object").columns:
+        non_null = df[col].dropna()
+        if non_null.empty:
+            continue
+        as_text = non_null.astype(str).str.strip()
+        if as_text.str.match(r"^0\d").any():
+            continue
+        cleaned = as_text.str.replace(" ", "", regex=False).str.replace(",", ".", regex=False)
+        if pd.to_numeric(cleaned, errors="coerce").notna().mean() >= min_share:
+            full = df[col].astype(str).str.strip().str.replace(" ", "", regex=False)
+            df[col] = pd.to_numeric(full.str.replace(",", ".", regex=False), errors="coerce")
+            converted.append(str(col))
+    df.attrs["numeric_converted"] = converted
+    return df
+
+
 def _count_csv_records(
     file_source: Union[str, BinaryIO, io.BytesIO], encoding: str, delimiter: str
 ) -> int:
@@ -163,7 +215,8 @@ def load_dataset(
     try:
         if file_type in ["xlsx", "xls"]:
             df = pd.read_excel(file_source)
-            return df
+            df.attrs["skipped_rows"] = 0
+            return coerce_numeric_like_columns(df)
 
         # Для CSV:
         if delimiter == "auto":
@@ -201,7 +254,7 @@ def load_dataset(
             file_source.seek(0)
         total_records = _count_csv_records(file_source, encoding, chosen_delim)
         df.attrs["skipped_rows"] = max(0, total_records - 1 - len(df))
-        return df
+        return coerce_numeric_like_columns(df)
 
     except UnicodeDecodeError as err:
         raise ValueError(
@@ -269,12 +322,8 @@ def analyze_dataset(df: pd.DataFrame) -> DatasetInfo:
             )
             if has_date_symbols:
                 try:
-                    import warnings
-
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore", UserWarning)
-                        converted = pd.to_datetime(sample_non_null, errors="coerce")
-                    if converted.notna().sum() >= 0.8 * len(sample_non_null):
+                    parsed = parse_dates_flexible(sample_non_null)
+                    if parsed.notna().sum() >= 0.8 * len(sample_non_null):
                         is_date = True
                 except Exception:
                     is_date = False

@@ -8,7 +8,19 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, RobustScaler, StandardScaler
+from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, RobustScaler, StandardScaler
+
+from src.data_loader import parse_dates_flexible
+
+
+def _to_string_array(X: np.ndarray) -> np.ndarray:
+    """Приводить усі значення категоріальних ознак до рядків.
+
+    Захищає OneHotEncoder від змішаних типів (рядки + числа) у одному стовпці.
+    Функція визначена на рівні модуля, щоб Pipeline можна було зберегти через joblib.
+    """
+    frame = pd.DataFrame(X)
+    return frame.astype(str).where(frame.notna(), np.nan).to_numpy(dtype=object)
 
 
 def build_preprocessor(
@@ -49,6 +61,7 @@ def build_preprocessor(
     if categorical_features:
         cat_pipeline = Pipeline(
             steps=[
+                ("to_str", FunctionTransformer(_to_string_array)),
                 ("imputer", SimpleImputer(strategy="most_frequent")),
                 (
                     "onehot",
@@ -128,7 +141,7 @@ def split_data(
     # Якщо вказано колонку дати для хронологічного поділу
     if date_col and date_col in df_clean.columns:
         # Конвертуємо дату для правильного сортування
-        df_clean["__parsed_date__"] = pd.to_datetime(df_clean[date_col], errors="coerce")
+        df_clean["__parsed_date__"] = parse_dates_flexible(df_clean[date_col])
         df_clean = df_clean.sort_values(by="__parsed_date__").reset_index(drop=True)
         df_clean = df_clean.drop(columns=["__parsed_date__"])
 
